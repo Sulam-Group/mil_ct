@@ -3,10 +3,10 @@
     "training": {
         "num_epochs": 25,
         "num_workers": 4,
-        "async_worker": true
+        "async_worker": false
     },
     "data": {
-        "data_dir": "/export/gaon1/data/jteneggi/data/rsna-intracranial-hemorrhage-detection",
+        "data_dir": "data",
         "ops": [
             "train",
             "val"

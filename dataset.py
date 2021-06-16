@@ -7,17 +7,27 @@ import torch.distributed as dist
 import torchvision.transforms.functional as TF
 import numpy as np
 from torch.utils.data import Dataset
+from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data.dataloader import DataLoader
 from dataset_provider import DatasetProviderInterface
 
+class Series():
+    def __init__(self, images, target, labels):
+        self.images = images
+        self.target = target
+        self.labels = labels
+    
+    def save(self, f):
+        torch.save(self, f)
 
 class hemorrhage_dataset(Dataset):
     def __init__(
         self,
-        data_dir="/export/gaon1/data/jteneggi/data/rsna-intracranial-hemorrhage-detection",
+        data_dir="data",
         op="train",
     ):
         series_path = os.path.join(data_dir, f"{op}_series.json")
+        self.series_dir = os.path.join(data_dir, "series")
         self.op_dir = os.path.join(data_dir, "stage_2_train")
         with open(series_path, "r", encoding="utf-8") as f:
             self.series_dictionary = json.load(f)
@@ -34,15 +44,16 @@ class hemorrhage_dataset(Dataset):
         target = series_obj["target"]
 
         series = np.array(series)
-        images = series[:, 0]
+        # images = series[:, 0]
         labels = series[:, 1]
 
-        series = [np.load(os.path.join(self.op_dir, f"ID_{u}.npy")) for u in images]
+        # series = [np.load(os.path.join(self.op_dir, f"ID_{u}.npy")) for u in images]
 
-        series = torch.Tensor(series).float().unsqueeze(1).repeat(1, 3, 1, 1)
-        series = TF.normalize(
-            series, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-        )
+        # series = torch.Tensor(series).float().unsqueeze(1).repeat(1, 3, 1, 1)
+        # series = TF.normalize(
+        #     series, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+        # )
+        series = torch.load(os.path.join(self.series_dir, series_idx))
         target = torch.Tensor([int(target)]).long()
         labels = torch.Tensor([labels.astype(int)]).long()
 
@@ -68,7 +79,7 @@ class SeriesBatch:
         return self
 
 
-def create_hemorrhage_dataset(args, data_dir, op, num_workers, train_batch_size):
+def create_hemorrhage_dataset(args, data_dir, op, train_batch_size):
     op_data = hemorrhage_dataset(data_dir=data_dir, op=op)
     args.logger.info(f"Found {len(op_data)} series for op {op}")
 
@@ -77,9 +88,9 @@ def create_hemorrhage_dataset(args, data_dir, op, num_workers, train_batch_size)
 
     op_loader = DataLoader(
         op_data,
-        shuffle=op == "train",
         batch_size=train_batch_size if op == "train" else 1,
-        num_workers=num_workers,
+        sampler=DistributedSampler(op_data, shuffle=True),
+        num_workers=4,
         collate_fn=collate_wrapper,
         pin_memory=True,
     )
@@ -88,21 +99,20 @@ def create_hemorrhage_dataset(args, data_dir, op, num_workers, train_batch_size)
 
 class HemorrhageDatasetProvider(DatasetProviderInterface):
     def __init__(self, args):
-        self.num_workers = args.config["training"]["num_workers"]
+        # self.num_workers = args.config["training"]["num_workers"]
         self.train_micro_batch_size_per_gpu = args.train_micro_batch_size_per_gpu
         self.logger = args.logger
 
         self.global_rank = dist.get_rank()
         self.world_size = dist.get_world_size()
 
-        self.data_dir = args.config["data"]["data_dir"]
-        self.ops = args.config["data"]["ops"]
+        self.data_dir = "data"
+        self.ops = ["train", "val"]
         self.dataloaders = {
             op: create_hemorrhage_dataset(
                 args,
                 self.data_dir,
                 op,
-                self.num_workers,
                 self.train_micro_batch_size_per_gpu,
             )
             for op in self.ops

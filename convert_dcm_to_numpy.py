@@ -3,7 +3,7 @@ from pydicom import dcmread
 from tqdm import tqdm
 import numpy as np
 
-data_dir = "/export/gaon1/data/jteneggi/data/rsna-intracranial-hemorrhage-detection"
+data_dir = "data"
 train_dir = os.path.join(data_dir, "stage_2_train")
 test_dir = os.path.join(data_dir, "stage_2_test")
 

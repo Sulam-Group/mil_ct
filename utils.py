@@ -7,35 +7,10 @@ def get_argument_parser():
 
     # Required_parameter
     parser.add_argument(
-        "--config-file",
-        "--cf",
-        help="pointer to the configuration file of the experiment",
-        type=str,
-        required=True,
-    )
-    parser.add_argument(
-        "--output_dir",
-        default=None,
-        type=str,
-        required=True,
-        help="The output directory where the model checkpoints will be written.",
-    )
-
-    # Optional Params
-    parser.add_argument(
-        "--job_name",
-        type=str,
-        default=None,
-        help="This is the path to store the output and TensorBoard results.",
-    )
-    parser.add_argument(
         "--local_rank",
         type=int,
         default=-1,
         help="local_rank for distributed training on gpus",
-    )
-    parser.add_argument(
-        "--seed", type=int, default=42, help="random seed for initialization"
     )
 
     # parser.add_argument(

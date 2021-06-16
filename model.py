@@ -5,16 +5,15 @@ from torchvision import models
 
 
 class HemorrhageDetector(nn.Module):
-    def __init__(self, n_dim=1024):
+    def __init__(self, n_dim=1024, hidden_width=64):
         super(HemorrhageDetector, self).__init__()
         self.n_dim = n_dim
+        self.hidden_width = hidden_width
         self.encoder = self.__encoder__()
         self.attention_mechanism = self.__attention_mechanism__()
         self.classifier = self.__classifier__()
 
     def __encoder__(self):
-        # maybe freeze convolutional layers of resnet,
-        # leave fully connected ones
         encoder = models.resnet18(pretrained=True)
 
         def freeze_convolutional_layers(m):
@@ -35,27 +34,30 @@ class HemorrhageDetector(nn.Module):
         return encoder
 
     def __attention_mechanism__(self):
-        hidden_width = 64
-
         return nn.Sequential(
-            nn.Linear(self.n_dim, hidden_width),
+            nn.Linear(self.n_dim, self.hidden_width),
             nn.Tanh(),
-            nn.Linear(hidden_width, 1),
+            nn.Linear(self.hidden_width, 1),
         )
 
     def __classifier__(self):
-        return nn.Sequential(nn.Linear(self.n_dim, 2), nn.Sigmoid())
+        return nn.Sequential(nn.Linear(self.n_dim, 1), nn.Sigmoid())
 
-    def forward(self, x, limits):
+    def forward(self, x, limits=None):
         H = self.encoder(x)
         A = self.attention_mechanism(H).t()
-        x = torch.stack(
-            [
-                self.classifier(
-                    torch.mm(F.softmax(A[:, l : limits[i]], dim=1), H[l : limits[i]])
-                )
-                for i, l in enumerate([0] + limits[:-1].tolist())
-            ],
-            dim=0,
-        )
+        if limits is None:
+            x = self.classifier(torch.mm(F.softmax(A, dim=1), H))
+        else:
+            x = torch.stack(
+                [
+                    self.classifier(
+                        torch.mm(
+                            F.softmax(A[:, l : limits[i]], dim=1), H[l : limits[i]]
+                        )
+                    )
+                    for i, l in enumerate([0] + limits[:-1].tolist())
+                ],
+                dim=0,
+            )
         return x.squeeze()
